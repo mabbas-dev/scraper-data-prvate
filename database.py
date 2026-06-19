@@ -56,27 +56,30 @@ def init_db():
     if db.query(UserAccount).count() == 0:
         default_users = [
             ("Perryhouse01", "Perryhouse02"),
-            ("Noor9226291", "sherry123"),
-            ("King2018299", "sherry123"),
-            ("Ankur283637", "sherry123"),
-            ("Wajiha00111", "Wajiha0022"),
-            ("Vamshi16266", "sherry123"),
-            ("Jackson28367", "sherry123"),
-            ("Gurram29100", "sherry123"),
-            ("Wajiha001", "Wajiha002"),
-            ("Ranisis8248277", "sherry12345"),
-            ("Naeem0012", "elitesubscription12"),
-            ("Masroor17336", "sherry123"),
-            ("Ranishergill277", "sherry123"),
-            ("Mazhar283627", "sherry123"),
-            ("Usafrnd282626", "sherry123"),
-            ("Imranahmed1967", "sherry123"),
-            ("Ather200123", "sherry123"),
-            ("Hussnainmir282627", "sherry123"),
-            ("Noman282627", "sherry123"),
-            ("Sohail2688", "sherry123"),
-            ("Rani78997", "sherry123")
-        ]
+        ("Noor9226291", "sherry123"),
+        ("King2018299", "sherry123"),
+        ("Ankur283637", "sherry123"),
+        ("Wajiha00111", "Wajiha0022"),
+        ("Vamshi16266", "sherry123"),
+        ("Jackson28367", "sherry123"),
+        ("Gurram29100", "sherry123"),
+        ("Wajiha001", "Wajiha002"),
+        ("Ranisis8248277", "sherry12345"),
+        ("Naeem0012", "elitesubscription12"),
+        ("Masroor17336", "sherry123"),
+        ("Ranishergill277", "sherry123"),
+        ("Mazhar283627", "sherry123"),
+        ("Usafrnd282626", "sherry123"),
+        ("Imranahmed1967", "sherry123"),
+        ("Ather200123", "sherry123"),
+        ("Hussnainmir282627", "sherry123"),
+        ("Noman282627", "sherry123"),
+        ("Sohail2688", "sherry123"),
+        ("Rani78997", "sherry123"),
+        ("zSTzdYmaB9", "eager2passage"),
+        ("Yaha282627", "sherry123"),
+        ("Zubair28267", "sherry123")
+    ]
         for u, p in default_users:
             db.add(UserAccount(username=u, password=p))
     
