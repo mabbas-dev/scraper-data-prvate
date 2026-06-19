@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPTV Master Scraper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        [v-cloak] { display: none; }
+        body { background-color: #f3f4f6; }
+    </style>
+</head>
+<body>
+    <div id="app" v-cloak class="min-h-screen">
+        <!-- Navbar -->
+        <nav class="bg-indigo-600 text-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-satellite-dish text-2xl"></i>
+                        <span class="font-bold text-xl">IPTV Master Scraper</span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 space-y-6">
+            
+            <!-- Dashboard Stats & Controls -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold text-gray-800">Scraping Engine</h2>
+                    <div class="space-x-2">
+                        <button v-if="!status.is_syncing" @click="startSync" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow transition">
+                            <i class="fa-solid fa-play mr-2"></i> Start / Resume
+                        </button>
+                        <button v-if="status.is_syncing" @click="stopSync" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded shadow transition">
+                            <i class="fa-solid fa-pause mr-2"></i> Pause
+                        </button>
+                        <button v-if="!status.is_syncing" @click="resetSync" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow transition">
+                            <i class="fa-solid fa-trash-can mr-2"></i> Reset Queue
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="mb-4 p-4 rounded-lg" :class="status.is_syncing ? 'bg-blue-50 border-l-4 border-blue-500' : 'bg-gray-50 border-l-4 border-gray-400'">
+                    <p class="font-semibold text-gray-700">Status: <span :class="status.is_syncing ? 'text-blue-600' : 'text-gray-600'">{{ status.sync_status_msg }}</span></p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                        <p class="text-sm text-indigo-500 font-semibold uppercase">Total Streams</p>
+                        <p class="text-3xl font-bold text-indigo-700">{{ status.stats.total }}</p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-100">
+                        <p class="text-sm text-green-500 font-semibold uppercase">Resolved (Done)</p>
+                        <p class="text-3xl font-bold text-green-700">{{ status.stats.done }}</p>
+                    </div>
+                    <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
+                        <p class="text-sm text-yellow-500 font-semibold uppercase">Pending / Queue</p>
+                        <p class="text-3xl font-bold text-yellow-700">{{ status.stats.pending }}</p>
+                    </div>
+                    <div class="bg-red-50 p-4 rounded-lg border border-red-100">
+                        <p class="text-sm text-red-500 font-semibold uppercase">Failed</p>
+                        <p class="text-3xl font-bold text-red-700">{{ status.stats.failed }}</p>
+                    </div>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="mt-6">
+                    <div class="flex justify-between text-sm text-gray-600 mb-1">
+                        <span>Progress</span>
+                        <span>{{ progressPercent }}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="bg-green-600 h-2.5 rounded-full transition-all duration-500" :style="{ width: progressPercent + '%' }"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration & Exports -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Settings -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Settings</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Host URL</label>
+                            <div class="flex mt-1">
+                                <input v-model="hostUrlInput" type="text" class="flex-1 border border-gray-300 rounded-l-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                <button @click="saveConfig" class="bg-indigo-600 text-white px-4 py-2 rounded-r-md hover:bg-indigo-700">Save</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Exported Files -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Exported Data</h3>
+                    <div v-if="exports.length === 0" class="text-gray-500 text-sm italic">
+                        No exports available yet. Complete a sync to generate JSON files.
+                    </div>
+                    <ul class="divide-y divide-gray-200">
+                        <li v-for="file in exports" :key="file.name" class="py-3 flex justify-between items-center">
+                            <div class="flex items-center">
+                                <i class="fa-solid fa-file-code text-indigo-500 text-2xl mr-3"></i>
+                                <div>
+                                    <p class="font-medium text-gray-800">{{ file.name }}</p>
+                                    <p class="text-xs text-gray-500">{{ (file.size / 1024 / 1024).toFixed(2) }} MB</p>
+                                </div>
+                            </div>
+                            <a :href="file.url" target="_blank" download class="text-indigo-600 hover:text-indigo-900 bg-indigo-50 px-3 py-1 rounded">
+                                <i class="fa-solid fa-download mr-1"></i> Download
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Users Management -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <div class="flex items-center space-x-4">
+                        <h3 class="text-lg font-bold text-gray-800">Worker Accounts (Users)</h3>
+                        <span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded border border-green-200">
+                            {{ activeUsersCount }} Active Workers
+                        </span>
+                    </div>
+                    <button @click="verifyWorkers" :disabled="status.is_syncing" class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-3 py-1.5 rounded text-sm shadow transition">
+                        <i class="fa-solid fa-user-check mr-1"></i> Verify All Workers
+                    </button>
+                </div>
+                
+                <form @submit.prevent="addUser" class="flex gap-3 mb-6 bg-gray-50 p-4 rounded border">
+                    <input v-model="newUser.username" required type="text" placeholder="Username" class="flex-1 border border-gray-300 rounded p-2 text-sm">
+                    <input v-model="newUser.password" required type="text" placeholder="Password" class="flex-1 border border-gray-300 rounded p-2 text-sm">
+                    <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">Add Account</button>
+                </form>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Username</th>
+                                <th class="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Password</th>
+                                <th class="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Verification</th>
+                                <th class="px-6 py-3 text-left font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-right font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr v-for="user in users" :key="user.id">
+                                <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{{ user.username }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-gray-500 font-mono">{{ user.password }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="text-xs font-semibold" :class="user.last_verified.includes('Valid') ? 'text-green-600' : (user.last_verified.includes('Invalid') ? 'text-red-600' : 'text-orange-500')">
+                                        {{ user.last_verified }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span @click="toggleUser(user.id)" class="cursor-pointer px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                                        :class="user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+                                        {{ user.is_active ? 'Active' : 'Disabled' }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right font-medium">
+                                    <button @click="deleteUser(user.id)" class="text-red-600 hover:text-red-900"><i class="fa-solid fa-trash"></i></button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    status: {
+                        host_url: '',
+                        is_syncing: false,
+                        sync_status_msg: 'Loading...',
+                        stats: { total: 0, done: 0, failed: 0, pending: 0 }
+                    },
+                    hostUrlInput: '',
+                    users: [],
+                    exports: [],
+                    newUser: { username: '', password: '' },
+                    pollInterval: null
+                }
+            },
+            computed: {
+                progressPercent() {
+                    if (this.status.stats.total === 0) return 0;
+                    return Math.round(((this.status.stats.done + this.status.stats.failed) / this.status.stats.total) * 100);
+                },
+                activeUsersCount() {
+                    return this.users.filter(u => u.is_active).length;
+                }
+            },
+            methods: {
+                async fetchStatus() {
+                    try {
+                        const res = await fetch('/api/status');
+                        const data = await res.json();
+                        this.status = data;
+                        if (!this.hostUrlInput && data.host_url) {
+                            this.hostUrlInput = data.host_url;
+                        }
+                    } catch (e) { console.error(e); }
+                },
+                async fetchUsers() {
+                    const res = await fetch('/api/users');
+                    this.users = await res.json();
+                },
+                async fetchExports() {
+                    const res = await fetch('/api/exports');
+                    this.exports = await res.json();
+                },
+                async saveConfig() {
+                    await fetch('/api/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ host_url: this.hostUrlInput })
+                    });
+                    this.fetchStatus();
+                },
+                async startSync() {
+                    await fetch('/api/sync/start', { method: 'POST' });
+                    this.fetchStatus();
+                },
+                async stopSync() {
+                    await fetch('/api/sync/stop', { method: 'POST' });
+                    this.fetchStatus();
+                },
+                async resetSync() {
+                    if(confirm("Are you sure? This will delete the current queue progress!")) {
+                        await fetch('/api/sync/reset', { method: 'POST' });
+                        this.fetchStatus();
+                    }
+                },
+                async addUser() {
+                    await fetch('/api/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.newUser)
+                    });
+                    this.newUser = { username: '', password: '' };
+                    this.fetchUsers();
+                },
+                async deleteUser(id) {
+                    if(confirm("Delete this user?")) {
+                        await fetch(`/api/users/${id}`, { method: 'DELETE' });
+                        this.fetchUsers();
+                    }
+                },
+                async toggleUser(id) {
+                    await fetch(`/api/users/${id}/toggle`, { method: 'POST' });
+                    this.fetchUsers();
+                },
+                async verifyWorkers() {
+                    await fetch('/api/users/verify', { method: 'POST' });
+                    this.fetchStatus();
+                }
+            },
+            mounted() {
+                this.fetchStatus();
+                this.fetchUsers();
+                this.fetchExports();
+                
+                // Poll for updates
+                this.pollInterval = setInterval(() => {
+                    this.fetchStatus();
+                    if(!this.status.is_syncing && this.status.sync_status_msg !== 'Verifying...') {
+                        this.fetchExports(); // Only refresh exports when not syncing to save IO
+                    }
+                    if(this.status.sync_status_msg === 'Verifying...' || this.status.sync_status_msg === 'Idle') {
+                        this.fetchUsers(); // Refresh users list when verifying
+                    }
+                }, 2000);
+            },
+            beforeUnmount() {
+                clearInterval(this.pollInterval);
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
