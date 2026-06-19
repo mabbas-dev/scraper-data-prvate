@@ -57,18 +57,15 @@ async def verify_all_workers():
     db.commit()
     
     async with aiohttp.ClientSession(headers={'User-Agent': 'Mozilla/5.0'}) as session:
-        # Instead of launching all 21 at the exact same millisecond, we stagger them slightly
-        tasks = []
-        for i, u in enumerate(users):
-            async def delayed_verify(session, host_url, user, index):
-                await asyncio.sleep(index * random.uniform(0.2, 0.5)) # Stagger starts
-                return await verify_single_worker(session, host_url, user)
-                
-            tasks.append(delayed_verify(session, config.host_url, u, i))
+        results = []
+        # Process strictly ONE BY ONE (Sequentially) to avoid DDoS detection
+        for u in users:
+            res = await verify_single_worker(session, config.host_url, u)
+            results.append(res)
+            # Add a long, human-like delay between each login attempt (2 to 4 seconds)
+            await asyncio.sleep(random.uniform(2.0, 4.0))
             
-        results = await asyncio.gather(*tasks)
-        
-        # Update db with results
+        return results
         for user_id, status_msg in results:
             u = db.query(UserAccount).filter(UserAccount.id == user_id).first()
             if u:
