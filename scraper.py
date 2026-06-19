@@ -165,32 +165,40 @@ async def populate_queue():
 
 async def worker(worker_id, user_account):
     print(f"Worker {worker_id} started with account {user_account.username}")
-    db = SessionLocal()
-    config = db.query(AppConfig).first()
-    host_url = config.host_url
     
+    # We must create a new session inside the async loop for safety
     # VLC User-Agent to trigger actual redirect
     async with aiohttp.ClientSession(headers={'User-Agent': 'VLC/3.0.18'}) as session:
         while True:
+            db = SessionLocal()
             # Check if sync is cancelled
             config = db.query(AppConfig).first()
-            if not config.is_syncing:
+            if not config or not config.is_syncing:
+                db.close()
                 break
                 
             # Get a pending item
             item = db.query(StreamQueue).filter(StreamQueue.status == 0).first()
             if not item:
+                db.close()
                 break # Queue empty
                 
             # Mark as processing (status=3 temporarily to avoid duplicate workers picking it)
             item.status = 3
             db.commit()
             
+            host_url = config.host_url
+            item_id = item.id
+            stream_id = item.stream_id
+            stream_type = item.stream_type
+            extension = item.extension
+            db.close()
+            
             # Construct user-specific URL
-            if item.stream_type == 'live':
-                test_url = f"{host_url}/{user_account.username}/{user_account.password}/{item.stream_id}"
+            if stream_type == 'live':
+                test_url = f"{host_url}/{user_account.username}/{user_account.password}/{stream_id}"
             else:
-                test_url = f"{host_url}/movie/{user_account.username}/{user_account.password}/{item.stream_id}.{item.extension}"
+                test_url = f"{host_url}/movie/{user_account.username}/{user_account.password}/{stream_id}.{extension}"
                 
             # Resolve
             resolved_url = None
@@ -206,19 +214,21 @@ async def worker(worker_id, user_account):
                 except Exception as ex:
                     pass
                     
-            if resolved_url:
-                item.hidden_url = resolved_url
-                item.status = 1 # Done
-            else:
-                item.status = 2 # Failed
-                
-            db.commit()
+            db = SessionLocal()
+            item = db.query(StreamQueue).filter(StreamQueue.id == item_id).first()
+            if item:
+                if resolved_url:
+                    item.hidden_url = resolved_url
+                    item.status = 1 # Done
+                else:
+                    item.status = 2 # Failed
+                db.commit()
+            db.close()
             
             # Very important: Add a human-like delay so we don't act like a DDoS bot
             # The server will allow requests if they look like a real player switching channels
             await asyncio.sleep(random.uniform(0.5, 1.5))
             
-    db.close()
     print(f"Worker {worker_id} finished.")
 
 async def run_sync():
@@ -247,9 +257,10 @@ async def run_sync():
     
     # Update status
     config = db.query(AppConfig).first()
-    config.is_syncing = False
-    config.sync_status_msg = "Idle (Last sync completed)"
-    db.commit()
+    if config:
+        config.is_syncing = False
+        config.sync_status_msg = "Idle (Last sync completed)"
+        db.commit()
     db.close()
     
     export_json()
