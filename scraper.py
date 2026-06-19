@@ -65,19 +65,20 @@ async def verify_all_workers():
             # Add a long, human-like delay between each login attempt (2 to 4 seconds)
             await asyncio.sleep(random.uniform(2.0, 4.0))
             
-        return results
+        # Update db with results
         for user_id, status_msg in results:
             u = db.query(UserAccount).filter(UserAccount.id == user_id).first()
             if u:
                 u.last_verified = status_msg
-                # Auto-disable invalid accounts, but DO NOT disable if it's just a firewall block
                 if "Invalid" in status_msg:
                     u.is_active = False
                     
+        # Reset the verifying status msg when done
         config.sync_status_msg = "Idle"
         db.commit()
         
     db.close()
+    return results
 
 async def populate_queue():
     db = SessionLocal()

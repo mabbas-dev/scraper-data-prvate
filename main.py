@@ -9,7 +9,21 @@ import os
 from database import SessionLocal, AppConfig, UserAccount, StreamQueue, Category
 import scraper
 
-app = FastAPI(title="IPTV Multi-Account Scraper")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Reset status on startup
+    db = SessionLocal()
+    config = db.query(AppConfig).first()
+    if config:
+        config.is_syncing = False
+        config.sync_status_msg = "Idle"
+        db.commit()
+    db.close()
+    yield
+
+app = FastAPI(title="IPTV Multi-Account Scraper", lifespan=lifespan)
 
 # Create data dir if not exists
 os.makedirs("data", exist_ok=True)
